@@ -49,7 +49,7 @@ def print_welcome():
     console.print(welcome_panel)
 
 def login_or_register():
-    global current_player  
+    global current_player
     while current_player is None:
         console.print("\n[1] Login")
         console.print("[2] Register")
@@ -62,7 +62,7 @@ def login_or_register():
 
         player = session.query(Player).filter_by(username=username).first()
 
-        if choice == '1':
+        if choice == '1': 
             if player:
                 current_player = player
                 console.print(f"\nWelcome back, [bold blue]{current_player.username}[/bold blue]!")
@@ -70,13 +70,28 @@ def login_or_register():
                 console.print("[bold red]Player not found. Please register.[/bold red]")
         
         elif choice == '2': 
-            if player:
-                console.print("[bold yellow]Username already exists. Please try logging in or choose a different username.[/bold yellow]")
-            else:
-                current_player = Player(username=username)
+         if player:
+                 console.print("[bold yellow]Username already exists. Please try logging in or choose a different username.[/bold yellow]")
+         else:
+            try:
+                current_player = Player(
+                username=username,
+                level=1,          
+                money=100,        
+                experience=0      
+                )
                 session.add(current_player)
-                session.commit()
-                console.print(f"\nWelcome, [bold green]{current_player.username}[/bold green]! Your adventure begins!")
+                session.commit()  
+                new_player = session.query(Player).filter_by(username=username).first()
+                if new_player:
+                    console.print(f"\nWelcome, [bold green]{current_player.username}[/bold green]! Your adventure begins!")
+                else:
+                    console.print("[bold red]Failed to create player account. Please try again.[/bold red]")
+                    current_player = None
+            except Exception as e:
+                session.rollback()
+                console.print(f"[bold red]Error creating account: {str(e)}[/bold red]")
+                current_player = None
                 
 def view_collection():
     console.print(Panel(f"[bold green]{current_player.username}'s Monster Collection[/bold green]", expand=False))
