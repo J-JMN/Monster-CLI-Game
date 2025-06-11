@@ -9,7 +9,6 @@ from rich.panel import Panel
 from rich.prompt import Prompt, IntPrompt
 from rich.text import Text
 from rich.live import Live
-
 from models import Base, Player, MonsterSpecies, PlayerMonster
 from seed import TYPE_EFFECTIVENESS, calculate_catch_rate
 
@@ -27,7 +26,7 @@ def get_player_by_id(player_id):
     return session.query(Player).get(player_id)
 
 def get_player_monster_by_id(monster_id):
-    return session.query(PlayerMonster).get(monster_id)
+    return session.get(PlayerMonster, monster_id)
 
 def calculate_monster_stats(monster):
     species = monster.species
@@ -110,6 +109,7 @@ def view_collection():
     table.add_column("HP", style="red")
     table.add_column("Attack", style="bold red")
     table.add_column("Defense", style="bold blue")
+    table.add_column("Rarity", style="magenta")
 
     for monster in monsters:
         stats = calculate_monster_stats(monster)
@@ -121,7 +121,8 @@ def view_collection():
             str(monster.level),
             f"{monster.current_hp}/{stats['max_hp']}",
             str(stats['attack']),
-            str(stats['defense'])
+            str(stats['defense']),
+            monster.species.rarity
         )
     console.print(table)
 
@@ -145,9 +146,14 @@ def attempt_catch():
         k=1
     )[0]
     
-    console.print(Panel(f"A wild [bold {wild_monster_species.rarity.lower()}]{wild_monster_species.name}[/bold {wild_monster_species.rarity.lower()}] appears!", 
-                          title="[bold yellow]Encounter![/bold yellow]", 
-                          border_style="yellow"))
+    color = wild_monster_species.rarity.lower()
+    console.print(Panel(
+        f"A wild [bold {color}]{wild_monster_species.name}[/bold {color}] appears!\n"
+        f"[dim]Rarity:[/dim] [bold {color}]{wild_monster_species.rarity}[/bold {color}]",
+        title="[bold yellow]Encounter![/bold yellow]",
+        border_style="yellow"
+    ))
+
 
     catch_chance = calculate_catch_rate(wild_monster_species.rarity, current_player.level)
     console.print(f"Your chance to catch it is [bold]{catch_chance:.0%}[/bold].")
@@ -170,6 +176,7 @@ def attempt_catch():
         session.add(new_monster)
         session.commit()
         console.print(f"[bold green]Gotcha! {wild_monster_species.name} was caught![/bold green]")
+
     else:
         console.print("[bold red]Oh no! The monster broke free![/bold red]")
 
@@ -201,12 +208,12 @@ def start_battle():
         while player_monster.current_hp > 0 and opponent_hp > 0:
             turn += 1
             
-            player_table = Table(title=f"Your {player_monster.nickname}")
+            player_table = Table(title=f"Your {player_monster.nickname} ({player_monster.species.rarity})")
             player_table.add_column("Stat", style="cyan")
             player_table.add_column("Value", style="white")
             player_table.add_row("HP", f"[bold red]{player_monster.current_hp}/{player_stats['max_hp']}[/bold red]")
             
-            opponent_table = Table(title=f"Wild {opponent_species.name}")
+            opponent_table = Table(title=f"Wild {opponent_species.name} ({opponent_species.rarity})")
             opponent_table.add_column("Stat", style="cyan")
             opponent_table.add_column("Value", style="white")
             opponent_table.add_row("HP", f"[bold red]{opponent_hp}/{opponent_stats['max_hp']}[/bold red]")
@@ -222,13 +229,13 @@ def start_battle():
             main_table.add_row(battle_panel)
 
             live.update(main_table, refresh=True)
-            time.sleep(1.5)
+            time.sleep(1.0)
 
             damage_to_opponent = max(1, player_stats['attack'] - opponent_stats['defense'] // 2)
             opponent_hp -= damage_to_opponent
             battle_summary = f"Your {player_monster.nickname} attacks! It deals [bold red]{damage_to_opponent}[/bold red] damage."
             live.update(main_table, refresh=True)
-            time.sleep(2.0)
+            time.sleep(1.5)
 
             if opponent_hp <= 0:
                 break
@@ -240,7 +247,8 @@ def start_battle():
             time.sleep(1.5)
 
     if player_monster.current_hp > 0:
-        console.print(Panel(f"[bold green]You defeated the wild {opponent_species.name}![/bold green]", border_style="green"))
+        console.print(Panel(f"[bold green]You defeated the wild {opponent_species.name} ({opponent_species.rarity})![/bold green]", border_style="green"))
+
         exp_gain = opponent_species.base_hp // 2
         money_gain = opponent_species.base_attack // 5
         current_player.experience += exp_gain
@@ -294,13 +302,15 @@ def trade_system():
     player_monster_table.add_column("Nickname", style="cyan")
     player_monster_table.add_column("Species", style="green")
     player_monster_table.add_column("Level", style="yellow")
-    
+    player_monster_table.add_column("Rarity", style="magenta")
+
     for monster in player_monsters:
         player_monster_table.add_row(
             str(monster.id),
             monster.nickname,
             monster.species.name,
-            str(monster.level)
+            str(monster.level),
+            monster.species.rarity
         )
     console.print(player_monster_table)
     
@@ -314,13 +324,15 @@ def trade_system():
     partner_monster_table.add_column("Nickname", style="cyan")
     partner_monster_table.add_column("Species", style="green")
     partner_monster_table.add_column("Level", style="yellow")
-    
+    partner_monster_table.add_column("Rarity", style="magenta")
+
     for monster in partner_monsters:
         partner_monster_table.add_row(
             str(monster.id),
             monster.nickname,
             monster.species.name,
-            str(monster.level)
+            str(monster.level),
+            monster.species.rarity
         )
     console.print(partner_monster_table)
     
@@ -328,8 +340,9 @@ def trade_system():
                                     choices=[str(m.id) for m in partner_monsters])
     their_monster = get_player_monster_by_id(their_monster_id)
     console.print("\n[bold]Trade Summary:[/bold]")
-    console.print(f"You will give: [cyan]{your_monster.nickname}[/cyan] ({your_monster.species.name}, Lvl {your_monster.level})")
-    console.print(f"You will receive: [green]{their_monster.nickname}[/green] ({their_monster.species.name}, Lvl {their_monster.level})")
+    console.print(f"You will give: [cyan]{your_monster.nickname}[/cyan] ({your_monster.species.name}, {your_monster.species.rarity}, Lvl {your_monster.level})")
+    console.print(f"You will receive: [green]{their_monster.nickname}[/green] ({their_monster.species.name}, {their_monster.species.rarity}, Lvl {their_monster.level})")
+
     
     confirm = Prompt.ask("\nConfirm this trade?", choices=["y", "n"], default="n")
     if confirm.lower() != 'y':
@@ -352,6 +365,132 @@ def trade_system():
         session.rollback()
         console.print(f"[red]Error during trade: {str(e)}[/red]")
 
+from time import sleep
+
+def healing_animation(monster_name: str = "your monster"):
+    frames = [
+        f"[bold cyan]🌿 {monster_name} lies in the center of the healing circle...[/bold cyan]",
+        "[cyan]✨ Ancient symbols begin to glow around the edges... ✨[/cyan]",
+        "[magenta]💫 A wave of restorative energy pulses through the shrine... 💫[/magenta]",
+        "[green]🌟 The monster’s wounds begin to close. Light flows into its body... 🌟[/green]",
+        "[bold green]✅ Fully healed! It opens its eyes, stronger than ever.[/bold green]"
+    ]
+
+    table = Table.grid()
+    table.add_column(justify="center", width=70)
+
+    with Live(table, refresh_per_second=4) as live:
+        for frame in frames:
+            table.columns[0]._cells.clear()
+            table.add_row(frame)
+            live.update(table)
+            sleep(2.0)
+
+def get_max_hp(monster):
+    return monster.species.base_hp + (monster.level * 5)  
+
+
+def heal_monster(session, player):
+    from rich.progress import track
+    import time
+
+    SINGLE_HEAL_COST = 10
+    BUNDLE_COST_PER_MONSTER = 7 
+
+    if not player.monsters:
+        console.print("[bold red]You have no monsters to heal.[/bold red]")
+        return
+
+    console.print("\n[bold cyan]🌿 Welcome to the Healing Shrine 🌿[/bold cyan]")
+    console.print("[italic]The spirits offer you restoration... but not without tribute.[/italic]\n")
+
+    injured = [m for m in player.monsters if m.current_hp < get_max_hp(m)]
+
+    if not injured:
+        time.sleep(1.5)
+        console.print("[bold green]Your monsters are already at full health. The spirits give you a high five.[/bold green]\n")
+        return
+
+    console.print("[bold]Choose your healing option:[/bold]")
+    console.print(f"[1] Heal a single monster — [yellow]{SINGLE_HEAL_COST} coins[/yellow]")
+    console.print(f"[2] Heal all injured monsters ({len(injured)} total) — [yellow]{BUNDLE_COST_PER_MONSTER * len(injured)} coins[/yellow]")
+    console.print("[0] Cancel and walk away")
+
+    option = IntPrompt.ask("\nYour choice", default=0)
+
+    if option == 0:
+        console.print("[italic]You respectfully bow and leave the shrine in peace.[/italic]\n")
+        return
+
+    elif option == 1:
+        for idx, monster in enumerate(injured, 1):
+            max_hp = get_max_hp(monster)
+            console.print(
+                 f"[{idx}] [bold yellow]{monster.nickname}[/bold yellow] the {monster.species.name} "
+                 f"— HP: [red]{monster.current_hp}[/red]/[green]{max_hp}[/green]"
+)
+
+        choice = IntPrompt.ask("\nEnter the number of the monster you'd like to heal", default=0)
+        if choice < 1 or choice > len(injured):
+            console.print("[bold red]Invalid choice. Even the spirits look confused.[/bold red]")
+            return
+
+        monster = injured[choice - 1]
+
+        if player.money < SINGLE_HEAL_COST:
+            console.print(
+                f"[bold red]You need {SINGLE_HEAL_COST} coins. You only have {player.money}.[/bold red]\n"
+                "[italic]A ghostly vendor shrugs in disappointment.[/italic]"
+            )
+            return
+
+        player.money -= SINGLE_HEAL_COST
+        prev_hp = monster.current_hp
+        monster.current_hp = get_max_hp(monster)
+        session.commit()
+
+        console.print("\n✨ [cyan]Mystic light floods the chamber...[/cyan] ✨")
+        healing_animation(monster.nickname)
+
+
+        console.print(
+            f"[bold green]{monster.nickname} is fully healed![/bold green] "
+            f"[dim]({prev_hp} → {monster.current_hp} HP)[/dim]"
+        )
+        console.print(f"[bold yellow]-{SINGLE_HEAL_COST} coins[/bold yellow] [dim](Remaining: {player.money})[/dim]\n")
+
+    elif option == 2:
+        if len(injured) == 1:
+            total_cost = SINGLE_HEAL_COST
+        else:
+            total_cost = BUNDLE_COST_PER_MONSTER * len(injured)
+
+        if player.money < total_cost:
+            console.print(
+                f"[bold red]You need {total_cost} coins to heal your monsters, but you only have {player.money}.[/bold red]"
+            )
+            return
+
+        player.money -= total_cost
+        console.print("\n✨ [cyan]The shrine pulses with warm energy...[/cyan] ✨")
+
+        for monster in injured:
+            monster.current_hp = get_max_hp(monster)
+
+
+        session.commit()
+
+        for _ in track(range(30), description="Healing your party..."):
+            time.sleep(0.3)
+
+        console.print(f"[bold green]All injured monsters have been fully healed![/bold green]")
+        console.print(f"[bold yellow]-{total_cost} coins[/bold yellow] [dim](Remaining: {player.money})[/dim]\n")
+
+        for monster in injured:
+            healing_animation(monster.nickname)
+
+
+ 
 def main_menu():
     global current_player  
     while True:
@@ -362,9 +501,10 @@ def main_menu():
         console.print("[4] Battle a Wild Monster")
         console.print("[5] Trade with Players (WIP)")
         console.print("[6] Logout and Switch Player")
-        console.print("[7] Exit Game")
+        console.print("[7] Heal Your Monsters")
+        console.print("[8] Exit Game")
         
-        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7"])
+        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8"])
 
         if choice == '1':
             view_profile()
@@ -381,6 +521,8 @@ def main_menu():
             console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
             login_or_register()
         elif choice == '7':
+            heal_monster(session, current_player)
+        elif choice == '8':
             console.print(Panel("[bold magenta]Thanks for playing Monster World![/bold magenta]"))
             break
         
