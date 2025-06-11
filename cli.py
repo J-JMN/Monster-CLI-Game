@@ -26,6 +26,14 @@ def get_player_by_id(player_id):
     return session.query(Player).get(player_id)
 
 def get_player_monster_by_id(monster_id):
+    """
+    🎯 Get Player's Monster by ID
+
+    - Searches `current_player.monsters` by ID.
+    - Returns monster or `None` if not found.
+    - Used in trading logic.
+    """
+
     return session.get(PlayerMonster, monster_id)
 
 def calculate_monster_stats(monster):
@@ -33,7 +41,7 @@ def calculate_monster_stats(monster):
     level = monster.level
     stats = {
         'max_hp': species.base_hp + (level * 5),
-        'attack': species.base_attack + (level * 2),
+        'attack': species.base_attack + (level * 3),
         'defense': species.base_defense + (level * 2)
     }
     return stats
@@ -48,6 +56,15 @@ def print_welcome():
     console.print(welcome_panel)
 
 def login_or_register():
+    """
+    🔐 Login or Register a Player
+
+    - Prompts user to login or register.
+    - Checks database for existing username.
+    - If new, creates a player and commits.
+    - Sets `current_player` globally for session use.
+    """
+
     global current_player
     while current_player is None:
         console.print("\n[1] Login")
@@ -93,6 +110,14 @@ def login_or_register():
                 current_player = None
                 
 def view_collection():
+    """
+    📚 View Player's Monster Collection
+
+    - Lists all monsters the player owns.
+    - Shows nickname, species, level, HP, rarity.
+    - Uses Rich Table for CLI visualization.
+    """
+
     console.print(Panel(f"[bold green]{current_player.username}'s Monster Collection[/bold green]", expand=False))
     monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
 
@@ -127,6 +152,13 @@ def view_collection():
     console.print(table)
 
 def view_profile():
+    """
+    📋 View Player Profile
+
+    - Displays current player's username, level, experience, and money.
+    - Uses Rich `console.rule()` for clean formatting.
+    """
+
     panel_content = f"""[bold blue]Username[/bold blue]: {current_player.username}
 [bold yellow]Level[/bold yellow]: {current_player.level}
 [bold green]Money[/bold green]: ${current_player.money}
@@ -135,6 +167,16 @@ def view_profile():
     console.print(Panel(panel_content, title=f"[bold cyan]{current_player.username}'s Profile[/bold cyan]", expand=False))
 
 def attempt_catch():
+    """
+    🪤 Attempt to Catch a Wild Monster
+
+    - Randomly selects a wild monster.
+    - Displays stats and asks player to catch or flee.
+    - Catch success is based on rarity and player's level.
+    - Adds monster to player on success.
+    - Provides outcome feedback with Rich visuals.
+    """
+
     console.print("\nSearching for a wild monster...", style="italic cyan")
     time.sleep(1.5)
 
@@ -180,9 +222,43 @@ def attempt_catch():
     else:
         console.print("[bold red]Oh no! The monster broke free![/bold red]")
 
+def render_xp_bar(current_xp, level):
+    threshold = level * 10
+    bar_length = 40
+    fill_ratio = current_xp / threshold
+    filled = int(bar_length * fill_ratio)
+    empty = bar_length - filled
+    bar = f"[bold cyan]|[/bold cyan]{'█' * filled}{' ' * empty}[bold cyan]|[/bold cyan]"
+    return f"{bar} {current_xp}/{threshold} XP"
+
+def get_type_effectiveness(attacker_type, defender_type):
+    """
+    🧮 Calculate Type Effectiveness
+
+    - Returns damage multiplier based on attacker vs defender type.
+    - Uses a dictionary-based matchup matrix.
+    """
+
+    if defender_type in TYPE_EFFECTIVENESS.get(attacker_type, {}).get('strong_against', []):
+        return 1.5, "It's super effective! Elemental bonus damage!"
+    elif defender_type in TYPE_EFFECTIVENESS.get(attacker_type, {}).get('weak_against', []):
+        return 0.7, "It's not very effective, Elemental debuffer!"
+    return 1.0, 
+
 def start_battle():
+    """
+    ⚔️ Start a Wild Monster Battle
+
+    - Allows player to choose one of their monsters.
+    - Battles a random wild monster.
+    - Turn-based damage system:
+        - Attacker level, randomness, and type effectiveness.
+    - Displays combat via Rich console.
+    - Awards XP, money, and level-ups.
+    """
+
     console.print(Panel("[bold red]Battle System (PvE)[/bold red]", expand=False))
-    
+
     player_monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
     if not player_monsters:
         console.print("[bold red]You have no monsters to battle with! Go catch some first.[/bold red]")
@@ -195,35 +271,36 @@ def start_battle():
     if not player_monster or player_monster.player_id != current_player.id:
         console.print("[bold red]Invalid selection.[/bold red]")
         return
-    
+
     all_species = session.query(MonsterSpecies).all()
     opponent_species = random.choice(all_species)
-    player_stats = calculate_monster_stats(player_monster)
-    opponent_stats = {'max_hp': opponent_species.base_hp, 'attack': opponent_species.base_attack, 'defense': opponent_species.base_defense}
-    opponent_hp = opponent_stats['max_hp']
 
+    player_stats = calculate_monster_stats(player_monster)
+    opponent_stats = {
+        'max_hp': opponent_species.base_hp,
+        'attack': opponent_species.base_attack,
+        'defense': opponent_species.base_defense
+    }
+    opponent_hp = opponent_stats['max_hp']
     battle_summary = ""
+
     with Live(console=console, screen=False, auto_refresh=False) as live:
         turn = 0
         while player_monster.current_hp > 0 and opponent_hp > 0:
             turn += 1
-            
+
             player_table = Table(title=f"Your {player_monster.nickname} ({player_monster.species.rarity})")
             player_table.add_column("Stat", style="cyan")
             player_table.add_column("Value", style="white")
             player_table.add_row("HP", f"[bold red]{player_monster.current_hp}/{player_stats['max_hp']}[/bold red]")
-            
+
             opponent_table = Table(title=f"Wild {opponent_species.name} ({opponent_species.rarity})")
             opponent_table.add_column("Stat", style="cyan")
             opponent_table.add_column("Value", style="white")
             opponent_table.add_row("HP", f"[bold red]{opponent_hp}/{opponent_stats['max_hp']}[/bold red]")
 
-            battle_panel = Panel(
-                Text(battle_summary, justify="center"),
-                title=f"[bold yellow]Turn {turn}[/bold yellow]",
-                border_style="red"
-            )
-            
+            battle_panel = Panel(battle_summary, title=f"[bold yellow]Turn {turn}[/bold yellow]", border_style="red")
+
             main_table = Table(show_header=False, box=None, expand=True)
             main_table.add_row(player_table, opponent_table)
             main_table.add_row(battle_panel)
@@ -231,36 +308,93 @@ def start_battle():
             live.update(main_table, refresh=True)
             time.sleep(1.0)
 
-            damage_to_opponent = max(1, player_stats['attack'] - opponent_stats['defense'] // 2)
+                        
+            player_atk_type = player_monster.species.monster_type
+            wild_def_type = opponent_species.monster_type
+            player_multiplier, player_effectiveness_msg = get_type_effectiveness(player_atk_type, wild_def_type)
+
+            base_damage = max(1, player_stats['attack'] - opponent_stats['defense'] // 2)
+            damage_to_opponent = int(base_damage * player_multiplier)
             opponent_hp -= damage_to_opponent
-            battle_summary = f"Your {player_monster.nickname} attacks! It deals [bold red]{damage_to_opponent}[/bold red] damage."
+
+            battle_summary = f"Your {player_monster.nickname} attacks! It deals [bold red]{damage_to_opponent} damage[/bold red]."
+            if player_effectiveness_msg:
+                battle_summary += f"\n[bold yellow]{player_effectiveness_msg}[/bold yellow]"
+
             live.update(main_table, refresh=True)
             time.sleep(1.5)
 
             if opponent_hp <= 0:
                 break
 
-            damage_to_player = max(1, opponent_stats['attack'] - player_stats['defense'] // 2)
+            
+            wild_atk_type = opponent_species.monster_type
+            player_def_type = player_monster.species.monster_type
+            wild_multiplier, wild_effectiveness_msg = get_type_effectiveness(wild_atk_type, player_def_type)
+
+            base_damage = max(1, opponent_stats['attack'] - player_stats['defense'] // 2)
+            damage_to_player = int(base_damage * wild_multiplier)
             player_monster.current_hp -= damage_to_player
-            battle_summary += f"\nThe wild {opponent_species.name} attacks back! It deals [bold red]{damage_to_player}[/bold red] damage."
+
+            battle_summary += f"\nThe wild {opponent_species.name} attacks back! It deals [bold red]{damage_to_player} damage[/bold red]."
+            if wild_effectiveness_msg:
+                battle_summary += f"\n[bold red]{wild_effectiveness_msg}[/bold red]"
+
             live.update(main_table, refresh=True)
             time.sleep(1.5)
 
+
     if player_monster.current_hp > 0:
-        console.print(Panel(f"[bold green]You defeated the wild {opponent_species.name} ({opponent_species.rarity})![/bold green]", border_style="green"))
+        console.print(Panel(
+            f"[bold green]You defeated the wild {opponent_species.name} ({opponent_species.rarity})![/bold green]",
+            border_style="green"
+        ))
 
         exp_gain = opponent_species.base_hp // 2
-        money_gain = opponent_species.base_attack // 5
+        player_monster.current_experience += exp_gain
         current_player.experience += exp_gain
+
+        leveled_up = False
+        while player_monster.current_experience >= player_monster.level * 10:
+            player_monster.current_experience -= player_monster.level * 10
+            player_monster.level += 1
+            leveled_up = True
+
+        if leveled_up:
+            player_monster.current_hp = player_monster.species.base_hp + (player_monster.level * 5)
+            console.print(f"[bold yellow]Congratulations! {player_monster.nickname} leveled up to Level {player_monster.level}![/bold yellow]")
+            console.print(f"[bold green]{player_monster.nickname} is now fully healed![/bold green]")
+        else:
+            max_hp = player_monster.species.base_hp + (player_monster.level * 5)
+            player_monster.current_hp = min(player_monster.current_hp, max_hp)
+
+        money_gain = opponent_species.base_attack // 5
         current_player.money += money_gain
+
         console.print(f"You earned [magenta]{exp_gain} EXP[/magenta] and [green]${money_gain}[/green]!")
+        console.print(f"[bold cyan]{player_monster.nickname}'s XP:[/bold cyan] {render_xp_bar(player_monster.current_experience, player_monster.level)}")
+
     else:
-        player_monster.current_hp = 0 
-        console.print(Panel(f"[bold red]Your {player_monster.nickname} has fainted! You rush to safety.[/bold red]", border_style="red"))
+        player_monster.current_hp = 0
+        console.print(Panel(
+            f"[bold red]Your {player_monster.nickname} has been injured! You rush to safety.[/bold red]",
+            border_style="red"
+        ))
 
     session.commit()
 
+
 def trade_system():
+    """
+    🤝 Trade Monsters Between Players
+
+    - Player selects another player.
+    - Views both monster collections.
+    - Trades one monster from each.
+    - Confirms trade, transfers ownership, updates nickname.
+    - Includes error handling and rollback safety.
+    """
+
     console.print(Panel("[bold yellow]Trade System[/bold yellow]", expand=False))
     
     other_players = session.query(Player).filter(Player.id != current_player.id).all()
@@ -368,10 +502,14 @@ def trade_system():
 from time import sleep
 
 def healing_animation(monster_name: str = "your monster"):
+    """
+    🎥 Visual Healing Animation
+
+    - Displays a live progress bar using Rich's `Live`.
+    - Makes healing feel more interactive.
+    """
     frames = [
         f"[bold cyan]🌿 {monster_name} lies in the center of the healing circle...[/bold cyan]",
-        "[cyan]✨ Ancient symbols begin to glow around the edges... ✨[/cyan]",
-        "[magenta]💫 A wave of restorative energy pulses through the shrine... 💫[/magenta]",
         "[green]🌟 The monster’s wounds begin to close. Light flows into its body... 🌟[/green]",
         "[bold green]✅ Fully healed! It opens its eyes, stronger than ever.[/bold green]"
     ]
@@ -379,18 +517,34 @@ def healing_animation(monster_name: str = "your monster"):
     table = Table.grid()
     table.add_column(justify="center", width=70)
 
-    with Live(table, refresh_per_second=4) as live:
+    with Live(table, refresh_per_second=6) as live:
         for frame in frames:
             table.columns[0]._cells.clear()
             table.add_row(frame)
             live.update(table)
-            sleep(2.0)
+            sleep(1.0)
 
 def get_max_hp(monster):
+    """
+    🧮 Get Max HP of Monster
+
+    - Formula: base_hp + (level * 5)
+    - Used to validate healing.
+    """
+
     return monster.species.base_hp + (monster.level * 5)  
 
 
 def heal_monster(session, player):
+    """
+    💖 Heal Injured Monsters
+
+    - Allows player to heal one or all monsters.
+    - Charges coins based on choice.
+    - Uses animated progress bars via Rich Live.
+    - Updates monsters’ current HP.
+    """
+
     from rich.progress import track
     import time
 
@@ -498,8 +652,8 @@ def main_menu():
         console.print("[1] View My Profile")
         console.print("[2] View My Monster Collection")
         console.print("[3] Explore and Catch Monsters")
-        console.print("[4] Battle a Wild Monster")
-        console.print("[5] Trade with Players (WIP)")
+        console.print("[4] Battle a Wild Monster (PvE)")
+        console.print("[5] Trade with Players")
         console.print("[6] Logout and Switch Player")
         console.print("[7] Heal Your Monsters")
         console.print("[8] Exit Game")
