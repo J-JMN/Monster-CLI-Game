@@ -253,20 +253,104 @@ def start_battle():
     session.commit()
 
 def trade_system():
-    console.print(Panel("[bold yellow]Trade System (Under Construction)[/bold yellow]", expand=False))
-    console.print("This feature will allow you to trade monsters with other players.")
+    console.print(Panel("[bold yellow]Trade System[/bold yellow]", expand=False))
     
-    players = session.query(Player).filter(Player.id != current_player.id).all()
-    if not players:
-        console.print("There are no other players to trade with yet.")
+    other_players = session.query(Player).filter(Player.id != current_player.id).all()
+    if not other_players:
+        console.print("[yellow]There are no other players to trade with yet.[/yellow]")
         return
 
-    table = Table(title="Available Players")
-    table.add_column("Username", style="cyan")
-    table.add_column("Level", style="yellow")
-    for p in players:
-        table.add_row(p.username, str(p.level))
-    console.print(table)
+    console.print("\n[bold cyan]Available Players:[/bold cyan]")
+    player_table = Table(show_header=True, header_style="bold magenta")
+    player_table.add_column("ID", style="dim", width=4)
+    player_table.add_column("Username", style="cyan")
+    player_table.add_column("Level", style="yellow")
+    player_table.add_column("Monsters", style="green")
+    
+    for idx, player in enumerate(other_players, start=1):
+        monster_count = session.query(PlayerMonster).filter_by(player_id=player.id).count()
+        player_table.add_row(str(idx), player.username, str(player.level), str(monster_count))
+    
+    console.print(player_table)
+    
+    partner_idx = IntPrompt.ask("\nSelect a player to trade with (enter ID)", choices=[str(i) for i in range(1, len(other_players)+1)])
+    trading_partner = other_players[int(partner_idx)-1]
+    
+    console.print(f"\n[bold]Trade between [cyan]{current_player.username}[/cyan] and [green]{trading_partner.username}[/green][/bold]")
+    
+    player_monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
+    partner_monsters = session.query(PlayerMonster).filter_by(player_id=trading_partner.id).all()
+    
+    if not player_monsters:
+        console.print("[red]You have no monsters to trade![/red]")
+        return
+    if not partner_monsters:
+        console.print(f"[red]{trading_partner.username} has no monsters to trade![/red]")
+        return
+    
+    console.print(f"\n[bold cyan]Your Monsters:[/bold cyan]")
+    player_monster_table = Table(show_header=True, header_style="bold magenta")
+    player_monster_table.add_column("ID", style="dim", width=4)
+    player_monster_table.add_column("Nickname", style="cyan")
+    player_monster_table.add_column("Species", style="green")
+    player_monster_table.add_column("Level", style="yellow")
+    
+    for monster in player_monsters:
+        player_monster_table.add_row(
+            str(monster.id),
+            monster.nickname,
+            monster.species.name,
+            str(monster.level)
+        )
+    console.print(player_monster_table)
+    
+    your_monster_id = IntPrompt.ask("\nSelect a monster to trade (enter ID)", 
+                                   choices=[str(m.id) for m in player_monsters])
+    your_monster = get_player_monster_by_id(your_monster_id)
+    
+    console.print(f"\n[bold green]{trading_partner.username}'s Monsters:[/bold green]")
+    partner_monster_table = Table(show_header=True, header_style="bold magenta")
+    partner_monster_table.add_column("ID", style="dim", width=4)
+    partner_monster_table.add_column("Nickname", style="cyan")
+    partner_monster_table.add_column("Species", style="green")
+    partner_monster_table.add_column("Level", style="yellow")
+    
+    for monster in partner_monsters:
+        partner_monster_table.add_row(
+            str(monster.id),
+            monster.nickname,
+            monster.species.name,
+            str(monster.level)
+        )
+    console.print(partner_monster_table)
+    
+    their_monster_id = IntPrompt.ask(f"\nSelect a monster from {trading_partner.username} to receive (enter ID)", 
+                                    choices=[str(m.id) for m in partner_monsters])
+    their_monster = get_player_monster_by_id(their_monster_id)
+    console.print("\n[bold]Trade Summary:[/bold]")
+    console.print(f"You will give: [cyan]{your_monster.nickname}[/cyan] ({your_monster.species.name}, Lvl {your_monster.level})")
+    console.print(f"You will receive: [green]{their_monster.nickname}[/green] ({their_monster.species.name}, Lvl {their_monster.level})")
+    
+    confirm = Prompt.ask("\nConfirm this trade?", choices=["y", "n"], default="n")
+    if confirm.lower() != 'y':
+        console.print("[yellow]Trade cancelled.[/yellow]")
+        return
+    
+    try:
+        your_monster.player_id = trading_partner.id
+        their_monster.player_id = current_player.id
+        your_monster.nickname = f"{your_monster.nickname} (from {current_player.username})"
+        their_monster.nickname = f"{their_monster.nickname} (from {trading_partner.username})"
+        
+        session.commit()
+        
+        console.print(Panel(f"[bold green]Trade completed successfully![/bold green]\n"
+                          f"You received [green]{their_monster.nickname}[/green]\n"
+                          f"{trading_partner.username} received [cyan]{your_monster.nickname}[/cyan]",
+                          border_style="green"))
+    except Exception as e:
+        session.rollback()
+        console.print(f"[red]Error during trade: {str(e)}[/red]")
 
 def main_menu():
     global current_player  
