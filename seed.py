@@ -21,8 +21,8 @@ RARITY_CATCH_CHANCE = {
     'Common': 0.8,
     'Uncommon': 0.6,
     'Rare': 0.3,
-    'Epic': 0.1,
-    'Legendary': 0.05
+    'Epic': 0.2,
+    'Legendary': 0.1
 }
 
 
