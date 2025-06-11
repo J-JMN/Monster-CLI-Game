@@ -243,7 +243,7 @@ def get_type_effectiveness(attacker_type, defender_type):
         return 1.5, "It's super effective! Elemental bonus damage!"
     elif defender_type in TYPE_EFFECTIVENESS.get(attacker_type, {}).get('weak_against', []):
         return 0.7, "It's not very effective, Elemental debuffer!"
-    return 1.0, 
+    return 1.0, "It's a neutral hit."
 
 def start_battle():
     """
