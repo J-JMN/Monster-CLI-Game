@@ -26,6 +26,14 @@ def get_player_by_id(player_id):
     return session.query(Player).get(player_id)
 
 def get_player_monster_by_id(monster_id):
+    """
+    🎯 Get Player's Monster by ID
+
+    - Searches `current_player.monsters` by ID.
+    - Returns monster or `None` if not found.
+    - Used in trading logic.
+    """
+
     return session.get(PlayerMonster, monster_id)
 
 def calculate_monster_stats(monster):
@@ -48,6 +56,15 @@ def print_welcome():
     console.print(welcome_panel)
 
 def login_or_register():
+    """
+    🔐 Login or Register a Player
+
+    - Prompts user to login or register.
+    - Checks database for existing username.
+    - If new, creates a player and commits.
+    - Sets `current_player` globally for session use.
+    """
+
     global current_player
     while current_player is None:
         console.print("\n[1] Login")
@@ -93,6 +110,14 @@ def login_or_register():
                 current_player = None
                 
 def view_collection():
+    """
+    📚 View Player's Monster Collection
+
+    - Lists all monsters the player owns.
+    - Shows nickname, species, level, HP, rarity.
+    - Uses Rich Table for CLI visualization.
+    """
+
     console.print(Panel(f"[bold green]{current_player.username}'s Monster Collection[/bold green]", expand=False))
     monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
 
@@ -127,6 +152,13 @@ def view_collection():
     console.print(table)
 
 def view_profile():
+    """
+    📋 View Player Profile
+
+    - Displays current player's username, level, experience, and money.
+    - Uses Rich `console.rule()` for clean formatting.
+    """
+
     panel_content = f"""[bold blue]Username[/bold blue]: {current_player.username}
 [bold yellow]Level[/bold yellow]: {current_player.level}
 [bold green]Money[/bold green]: ${current_player.money}
@@ -135,6 +167,16 @@ def view_profile():
     console.print(Panel(panel_content, title=f"[bold cyan]{current_player.username}'s Profile[/bold cyan]", expand=False))
 
 def attempt_catch():
+    """
+    🪤 Attempt to Catch a Wild Monster
+
+    - Randomly selects a wild monster.
+    - Displays stats and asks player to catch or flee.
+    - Catch success is based on rarity and player's level.
+    - Adds monster to player on success.
+    - Provides outcome feedback with Rich visuals.
+    """
+
     console.print("\nSearching for a wild monster...", style="italic cyan")
     time.sleep(1.5)
 
@@ -190,13 +232,31 @@ def render_xp_bar(current_xp, level):
     return f"{bar} {current_xp}/{threshold} XP"
 
 def get_type_effectiveness(attacker_type, defender_type):
+    """
+    🧮 Calculate Type Effectiveness
+
+    - Returns damage multiplier based on attacker vs defender type.
+    - Uses a dictionary-based matchup matrix.
+    """
+
     if defender_type in TYPE_EFFECTIVENESS.get(attacker_type, {}).get('strong_against', []):
         return 1.5, "It's super effective! Elemental bonus damage!"
     elif defender_type in TYPE_EFFECTIVENESS.get(attacker_type, {}).get('weak_against', []):
         return 0.7, "It's not very effective, Elemental debuffer!"
-    return 1.0, ""
+    return 1.0, 
 
 def start_battle():
+    """
+    ⚔️ Start a Wild Monster Battle
+
+    - Allows player to choose one of their monsters.
+    - Battles a random wild monster.
+    - Turn-based damage system:
+        - Attacker level, randomness, and type effectiveness.
+    - Displays combat via Rich console.
+    - Awards XP, money, and level-ups.
+    """
+
     console.print(Panel("[bold red]Battle System (PvE)[/bold red]", expand=False))
 
     player_monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
@@ -325,6 +385,16 @@ def start_battle():
 
 
 def trade_system():
+    """
+    🤝 Trade Monsters Between Players
+
+    - Player selects another player.
+    - Views both monster collections.
+    - Trades one monster from each.
+    - Confirms trade, transfers ownership, updates nickname.
+    - Includes error handling and rollback safety.
+    """
+
     console.print(Panel("[bold yellow]Trade System[/bold yellow]", expand=False))
     
     other_players = session.query(Player).filter(Player.id != current_player.id).all()
@@ -432,6 +502,12 @@ def trade_system():
 from time import sleep
 
 def healing_animation(monster_name: str = "your monster"):
+    """
+    🎥 Visual Healing Animation
+
+    - Displays a live progress bar using Rich's `Live`.
+    - Makes healing feel more interactive.
+    """
     frames = [
         f"[bold cyan]🌿 {monster_name} lies in the center of the healing circle...[/bold cyan]",
         "[green]🌟 The monster’s wounds begin to close. Light flows into its body... 🌟[/green]",
@@ -449,10 +525,26 @@ def healing_animation(monster_name: str = "your monster"):
             sleep(1.0)
 
 def get_max_hp(monster):
+    """
+    🧮 Get Max HP of Monster
+
+    - Formula: base_hp + (level * 5)
+    - Used to validate healing.
+    """
+
     return monster.species.base_hp + (monster.level * 5)  
 
 
 def heal_monster(session, player):
+    """
+    💖 Heal Injured Monsters
+
+    - Allows player to heal one or all monsters.
+    - Charges coins based on choice.
+    - Uses animated progress bars via Rich Live.
+    - Updates monsters’ current HP.
+    """
+
     from rich.progress import track
     import time
 
