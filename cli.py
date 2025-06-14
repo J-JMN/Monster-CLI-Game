@@ -871,13 +871,7 @@ def main_menu():
     while True:
         console.rule(f"[bold light_steel_blue]Main Menu[/bold light_steel_blue] | Logged in as: [slate_blue1]{current_player.username}[/slate_blue1]")
 
-        console.print("[1] [slate_blue1]View My Profile[/slate_blue1]")
-        console.print("[2] [slate_blue1]View My Monster Collection[/slate_blue1]")
-
-        console.print("[3] [medium_purple3]Explore and Catch Monsters[/medium_purple3]")
-        console.print("[4] [medium_purple3]Battle a Wild Monster (PvE)[/medium_purple3]")
-
-        console.print("[5] [plum3]Battle another Player (PvP)[/plum3]")
+        console.print("[1] [slate_blue1]View My Profile[/slatum3]")
         console.print("[6] [plum3]Trade with Players[/plum3]")
 
         console.print("[7] [sky_blue1]Heal Your Monsters[/sky_blue1]")
@@ -899,9 +893,9 @@ def main_menu():
         elif choice == '5':
             start_pvp_battle()
         elif choice == '6':
-            heal_monster(session, current_player)
-        elif choice == '7':
             trade_system()
+        elif choice == '7':
+            heal_monster(session, current_player)
         elif choice == '8': 
              current_player = None
              console.print("\n[bold yellow]You have been logged out.[/bold yellow]")

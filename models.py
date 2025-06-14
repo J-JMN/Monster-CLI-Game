@@ -67,11 +67,10 @@ class Battle(Base):
     turns_taken = Column(Integer)
     player1_id = Column(Integer, ForeignKey('players.id'), nullable=False)
     player2_id = Column(Integer, ForeignKey('players.id'))
-    winner_id = Column(Integer, ForeignKey('players.id'))
+    winner_id = Column(Integer, ForeignKey('players.id'), nullable=False)
     player1 = relationship("Player", foreign_keys=[player1_id], back_populates="battles_as_player1")
     player2 = relationship("Player", foreign_keys=[player2_id], back_populates="battles_as_player2")
     winner = relationship("Player", foreign_keys=[winner_id], back_populates="battles_won")
-
 class Trade(Base):
     __tablename__ = 'trades'
     id = Column(Integer, primary_key=True)
