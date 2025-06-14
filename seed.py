@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from models import Base, Player, MonsterSpecies, PlayerMonster, Achievement, PlayerAchievement
 
 engine = create_engine('sqlite:///monster_game.db')
-Session = sessionmaker(bind=engine)
+Session = sessionmaker(bind=engine) 
 session = Session()
 
 TYPE_EFFECTIVENESS = {

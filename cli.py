@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt, IntPrompt
 from rich.text import Text
 from rich.live import Live
-from models import Base, Player, MonsterSpecies, PlayerMonster
+from models import Base, Player, MonsterSpecies, PlayerMonster, Battle
 from seed import TYPE_EFFECTIVENESS, calculate_catch_rate
 
 current_player = None
@@ -382,6 +382,227 @@ def start_battle():
         ))
 
     session.commit()
+def start_pvp_battle():
+        
+    console.print(Panel("[bold yellow]Player vs. Player (PvP) Battle![/bold yellow]", expand=False))
+    other_players = session.query(Player).filter(Player.id != current_player.id).all()
+    if not other_players:
+        console.print("[bold red]No other players available to battle. Try registering more players first![/bold red]")
+        return
+
+    console.print("\n[bold cyan]Available Opponents:[/bold cyan]")
+    player_table = Table(show_header=True, header_style="bold magenta")
+    player_table.add_column("ID", style="dim", width=4)
+    player_table.add_column("Username", style="cyan")
+    player_table.add_column("Level", style="yellow")
+    player_table.add_column("Monsters", style="green")
+
+    player_options_map = {} # Map index to player object
+    for idx, player in enumerate(other_players, start=1):
+        monster_count = session.query(PlayerMonster).filter_by(player_id=player.id).count()
+        player_table.add_row(str(idx), player.username, str(player.level), str(monster_count))
+        player_options_map[idx] = player
+
+    console.print(player_table)
+
+    opponent_choice = IntPrompt.ask("\nSelect an opponent (enter ID)", choices=[str(i) for i in player_options_map.keys()])
+    opponent_player = player_options_map[opponent_choice]
+
+    if not opponent_player.monsters:
+        console.print(f"[bold red]{opponent_player.username} has no monsters to battle with![/bold red]")
+        return
+
+    console.print(f"\n[bold green]You challenged [cyan]{opponent_player.username}[/cyan] to a battle![/bold green]")
+    time.sleep(1)
+
+    # 2. Current Player selects their monster
+    your_monsters = session.query(PlayerMonster).filter_by(player_id=current_player.id).all()
+    if not your_monsters:
+        console.print("[bold red]You have no monsters to battle with! Go catch some first.[/bold red]")
+        return
+
+    console.print(f"\n[bold cyan]Your Monsters:[/bold cyan]")
+    your_monster_table = Table(show_header=True, header_style="bold blue")
+    your_monster_table.add_column("ID", style="dim", width=4)
+    your_monster_table.add_column("Nickname", style="cyan")
+    your_monster_table.add_column("Species", style="green")
+    your_monster_table.add_column("Level", style="yellow")
+    your_monster_table.add_column("HP", style="red")
+
+    your_monster_options_map = {}
+    for idx, monster in enumerate(your_monsters, start=1):
+        stats = calculate_monster_stats(monster)
+        your_monster_table.add_row(
+            str(monster.id), monster.nickname, monster.species.name, str(monster.level),
+            f"{monster.current_hp}/{stats['max_hp']}"
+        )
+        your_monster_options_map[monster.id] = monster # Store by actual monster ID
+
+    console.print(your_monster_table)
+    chosen_player_monster_id = IntPrompt.ask("Choose your monster (enter ID)", choices=[str(m.id) for m in your_monsters])
+    player_monster = get_player_monster_by_id(chosen_player_monster_id)
+
+    if not player_monster or player_monster.player_id != current_player.id:
+        console.print("[bold red]Invalid monster selection.[/bold red]")
+        return
+
+    # 3. Opponent's monster is randomly selected
+    opponent_monsters = session.query(PlayerMonster).filter_by(player_id=opponent_player.id).all()
+    opponent_monster = random.choice(opponent_monsters) # Randomly pick one for the opponent
+
+    console.print(f"\n[cyan]{opponent_player.username}[/cyan] sends out [green]{opponent_monster.nickname}[/green]!")
+    time.sleep(1)
+
+    # Prepare battle stats
+    player_stats = calculate_monster_stats(player_monster)
+    opponent_stats = calculate_monster_stats(opponent_monster) # Opponent also uses PlayerMonster stats now!
+
+    # Current HP for battle (don't directly modify DB until commit)
+    player_current_hp = player_monster.current_hp
+    opponent_current_hp = opponent_monster.current_hp
+
+    battle_summary = ""
+    winner_player_id = None
+    turns_taken = 0
+
+    with Live(console=console, screen=False, auto_refresh=False) as live:
+        while player_current_hp > 0 and opponent_current_hp > 0:
+            turns_taken += 1
+
+            # Display battle state
+            player_table = Table(title=f"Your {player_monster.nickname} ({player_monster.species.rarity})")
+            player_table.add_column("Stat", style="cyan")
+            player_table.add_column("Value", style="white")
+            player_table.add_row("Level", str(player_monster.level))
+            player_table.add_row("HP", f"[bold red]{max(0, player_current_hp)}/{player_stats['max_hp']}[/bold red]")
+            player_table.add_row("Attack", str(player_stats['attack']))
+            player_table.add_row("Defense", str(player_stats['defense']))
+
+            opponent_table = Table(title=f"{opponent_player.username}'s {opponent_monster.nickname} ({opponent_monster.species.rarity})")
+            opponent_table.add_column("Stat", style="cyan")
+            opponent_table.add_column("Value", style="white")
+            opponent_table.add_row("Level", str(opponent_monster.level))
+            opponent_table.add_row("HP", f"[bold red]{max(0, opponent_current_hp)}/{opponent_stats['max_hp']}[/bold red]")
+            opponent_table.add_row("Attack", str(opponent_stats['attack']))
+            opponent_table.add_row("Defense", str(opponent_stats['defense']))
+
+            battle_panel = Panel(battle_summary, title=f"[bold yellow]Turn {turns_taken}[/bold yellow]", border_style="red")
+
+            main_table = Table(show_header=False, box=None, expand=True)
+            main_table.add_row(player_table, opponent_table)
+            main_table.add_row(battle_panel)
+
+            live.update(main_table, refresh=True)
+            time.sleep(1.0)
+
+            # Player's monster attacks
+            player_atk_type = player_monster.species.monster_type
+            opponent_def_type = opponent_monster.species.monster_type
+            player_multiplier, player_effectiveness_msg = get_type_effectiveness(player_atk_type, opponent_def_type)
+
+            base_damage = max(1, player_stats['attack'] - opponent_stats['defense'] // 2)
+            damage_to_opponent = int(base_damage * player_multiplier * (1 + random.uniform(-0.1, 0.1))) # Add some randomness
+            opponent_current_hp -= damage_to_opponent
+
+            battle_summary = f"Your [cyan]{player_monster.nickname}[/cyan] attacks [green]{opponent_monster.nickname}[/green]! It deals [bold red]{damage_to_opponent} damage[/bold red]."
+            if player_effectiveness_msg:
+                battle_summary += f"\n[bold yellow]{player_effectiveness_msg}[/bold yellow]"
+
+            live.update(main_table, refresh=True)
+            time.sleep(1.5)
+
+            if opponent_current_hp <= 0:
+                winner_player_id = current_player.id
+                break
+
+            # Opponent's monster attacks back
+            opponent_atk_type = opponent_monster.species.monster_type
+            player_def_type = player_monster.species.monster_type
+            opponent_multiplier, opponent_effectiveness_msg = get_type_effectiveness(opponent_atk_type, player_def_type)
+
+            base_damage = max(1, opponent_stats['attack'] - player_stats['defense'] // 2)
+            damage_to_player = int(base_damage * opponent_multiplier * (1 + random.uniform(-0.1, 0.1))) # Add some randomness
+            player_current_hp -= damage_to_player
+
+            battle_summary += f"\n[green]{opponent_monster.nickname}[/green] attacks back! It deals [bold red]{damage_to_player} damage[/bold red]."
+            if opponent_effectiveness_msg:
+                battle_summary += f"\n[bold red]{opponent_effectiveness_msg}[/bold red]"
+
+            live.update(main_table, refresh=True)
+            time.sleep(1.5)
+
+            if player_current_hp <= 0:
+                winner_player_id = opponent_player.id
+                break
+
+    # 4. Battle Outcome and Persistence
+    player_monster.current_hp = max(0, player_current_hp)
+    opponent_monster.current_hp = max(0, opponent_current_hp)
+
+    try:
+        # Record the battle
+        new_battle = Battle(
+            player1=current_player,
+            player2=opponent_player,
+            winner_id=winner_player_id,
+            turns_taken=turns_taken
+        )
+        session.add(new_battle)
+
+        if winner_player_id == current_player.id:
+            console.print(Panel(
+                f"[bold green]Victory! You defeated {opponent_player.username}'s {opponent_monster.nickname}![/bold green]",
+                border_style="green"
+            ))
+            exp_gain = opponent_monster.level * 5 # PvP XP reward
+            money_gain = opponent_monster.level * 10 # PvP Money reward
+
+            player_monster.current_experience += exp_gain
+            current_player.experience += exp_gain
+            current_player.money += money_gain
+
+            # Level up logic for player's monster
+            leveled_up = False
+            while player_monster.current_experience >= player_monster.level * 10:
+                player_monster.current_experience -= player_monster.level * 10
+                player_monster.level += 1
+                player_monster.current_hp = calculate_monster_stats(player_monster)['max_hp'] # Fully heal on level up
+                leveled_up = True
+
+            if leveled_up:
+                console.print(f"[bold yellow]Congratulations! Your {player_monster.nickname} leveled up to Level {player_monster.level} and is fully healed![/bold yellow]")
+            else:
+                console.print(f"[bold green]{player_monster.nickname} gained {exp_gain} EXP.[/bold green] (Current: {render_xp_bar(player_monster.current_experience, player_monster.level)})")
+
+
+            console.print(f"You earned [magenta]{exp_gain} EXP[/magenta] and [green]${money_gain}[/green]!")
+            
+            # Healing message if not leveled up
+            if not leveled_up:
+                max_hp_after_battle = calculate_monster_stats(player_monster)['max_hp']
+                # Ensure current_hp doesn't exceed max_hp after battle if no level up
+                player_monster.current_hp = min(player_monster.current_hp, max_hp_after_battle)
+
+
+            # Check for achievements after win
+            # (We'll implement unlock_achievement and its checks next)
+            # unlock_achievement(current_player, "First Win") # Example
+
+        else: # Opponent won
+            console.print(Panel(
+                f"[bold red]Defeat! Your {player_monster.nickname} was defeated by {opponent_player.username}'s {opponent_monster.nickname}.[/bold red]\n"
+                f"Your {player_monster.nickname} needs healing!",
+                border_style="red"
+            ))
+            # No XP/money for losing, monster remains injured.
+            # You might want to add a small money penalty or experience loss here.
+
+        session.commit()
+        console.print("[dim]Battle results saved.[/dim]")
+
+    except Exception as e:
+        session.rollback()
+        console.print(f"[bold red]An error occurred during battle resolution: {str(e)}[/bold red]")
 
 
 def trade_system():
@@ -656,9 +877,10 @@ def main_menu():
         console.print("[5] Trade with Players")
         console.print("[6] Logout and Switch Player")
         console.print("[7] Heal Your Monsters")
-        console.print("[8] Exit Game")
+        console.print("[8] [bold yellow]Battle another Player (PvP)[/bold yellow]")
+        console.print("[9] Exit Game")
         
-        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8"])
+        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8","9"])
 
         if choice == '1':
             view_profile()
@@ -676,11 +898,13 @@ def main_menu():
             login_or_register()
         elif choice == '7':
             heal_monster(session, current_player)
-        elif choice == '8':
+        elif choice == '8': 
+            start_pvp_battle()    
+        elif choice == '9':
             console.print(Panel("[bold magenta]Thanks for playing Monster World![/bold magenta]"))
             break
         
-        if choice in ['1', '2', '3', '4', '5']:
+        if choice in ['1', '2', '3', '4', '5', '8']:
             Prompt.ask("\n[italic]Press Enter to return to the menu...[/italic]")
 
 if __name__ == '__main__':
