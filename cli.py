@@ -869,17 +869,23 @@ def heal_monster(session, player):
 def main_menu():
     global current_player  
     while True:
-        console.rule(f"[bold blue]Main Menu[/bold blue] | Logged in as: [green]{current_player.username}[/green]")
-        console.print("[1] View My Profile")
-        console.print("[2] View My Monster Collection")
-        console.print("[3] Explore and Catch Monsters")
-        console.print("[4] Battle a Wild Monster (PvE)")
-        console.print("[5] Trade with Players")
-        console.print("[6] Logout and Switch Player")
-        console.print("[7] Heal Your Monsters")
-        console.print("[8] [bold yellow]Battle another Player (PvP)[/bold yellow]")
-        console.print("[9] Exit Game")
-        
+        console.rule(f"[bold light_steel_blue]Main Menu[/bold light_steel_blue] | Logged in as: [slate_blue1]{current_player.username}[/slate_blue1]")
+
+        console.print("[1] [slate_blue1]View My Profile[/slate_blue1]")
+        console.print("[2] [slate_blue1]View My Monster Collection[/slate_blue1]")
+
+        console.print("[3] [medium_purple3]Explore and Catch Monsters[/medium_purple3]")
+        console.print("[4] [medium_purple3]Battle a Wild Monster (PvE)[/medium_purple3]")
+
+        console.print("[5] [plum3]Battle another Player (PvP)[/plum3]")
+        console.print("[6] [plum3]Trade with Players[/plum3]")
+
+        console.print("[7] [sky_blue1]Heal Your Monsters[/sky_blue1]")
+        console.print("[8] [sky_blue1]Logout and Switch Player[/sky_blue1]")
+
+        console.print("[9] [grey37]Exit Game[/grey37]")
+
+
         choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8","9"])
 
         if choice == '1':
@@ -891,15 +897,15 @@ def main_menu():
         elif choice == '4':
             start_battle()
         elif choice == '5':
-            trade_system()
+            start_pvp_battle()
         elif choice == '6':
-            current_player = None
-            console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
-            login_or_register()
-        elif choice == '7':
             heal_monster(session, current_player)
+        elif choice == '7':
+            trade_system()
         elif choice == '8': 
-            start_pvp_battle()    
+             current_player = None
+             console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
+             login_or_register()    
         elif choice == '9':
             console.print(Panel("[bold magenta]Thanks for playing Monster World![/bold magenta]"))
             break
