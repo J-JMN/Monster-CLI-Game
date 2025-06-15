@@ -9,10 +9,37 @@ from rich.panel import Panel
 from rich.prompt import Prompt, IntPrompt
 from rich.text import Text
 from rich.live import Live
-from models import Base, Player, MonsterSpecies, PlayerMonster, Battle
+from models import Base, Player, MonsterSpecies, PlayerMonster, Battle, Achievement, PlayerAchievement
 from seed import TYPE_EFFECTIVENESS, calculate_catch_rate
 
 current_player = None
+
+ACHIEVEMENT_REWARDS = {
+    "First Catch": {"money": 50, "xp": 20},
+    "Collector": {"money": 100, "xp": 50},
+    "Master Collector": {"money": 300, "xp": 150},
+    "First Win": {"money": 75, "xp": 30},
+    "Hot Streak": {"money": 200, "xp": 100}, # Example: Win 5 battles in a row (logic for this is more complex, but the reward is here)
+    "Rarity Hunter": {"money": 150, "xp": 75}, # Catch a Rare monster
+    "Epic Encounter": {"money": 250, "xp": 125}, # Catch an Epic monster
+    "Legendary Tamer": {"money": 500, "xp": 250}, # Catch a Legendary monster
+    "Level Up!": {"money": 20, "xp": 0}, # Small reward just for leveling up (can be triggered every level)
+    "Player Level 5": {"money": 100, "xp": 0}, # Specific level milestone
+    "Player Level 10": {"money": 250, "xp": 0}, 
+}
+
+PLAYER_XP_THRESHOLDS = {
+    1: 0,    # Starting XP for Level 1
+    2: 100,  # Total XP needed to reach Level 2
+    3: 250, 
+    4: 450,
+    5: 700,
+    6: 1000,
+    7: 1350,
+    8: 1750,
+    9: 2200,
+    10: 2700,
+}
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "monster_game.db")
@@ -45,6 +72,196 @@ def calculate_monster_stats(monster):
         'defense': species.base_defense + (level * 2)
     }
     return stats
+
+def unlock_achievement(player, achievement_name):
+    if not achievement:
+        # console.print(f"[bold red]Error: Achievement '{achievement_name}' not found in DB.[/bold red]")
+        return
+
+    existing_link = session.query(PlayerAchievement).filter_by(
+        player_id=player.id, achievement_id=achievement.id
+    ).first()
+
+    if not existing_link:
+        try:
+            new_link = PlayerAchievement(player=player, achievement=achievement)
+            session.add(new_link)
+
+            rewards = ACHIEVEMENT_REWARDS.get(achievement_name, {"money": 0, "xp": 0})
+            player.money += rewards["money"]
+            player.experience += rewards["xp"]
+
+            session.commit()
+            console.print(Panel(
+                f"[bold yellow]Achievement Unlocked![/bold yellow]\n"
+                f"[cyan]{achievement.name}[/cyan]: {achievement.description}\n"
+                f"You gained [green]${rewards['money']}[/green] and [magenta]{rewards['xp']} EXP[/magenta]!",
+                title="[bold green]New Achievement![/bold green]",
+                border_style="yellow"
+            ))
+            # After gaining XP, always check for player level up
+            check_player_level_up(player) # Call this immediately after any XP gain
+        except Exception as e:
+            session.rollback()
+            console.print(f"[bold red]Error unlocking achievement '{achievement_name}': {str(e)}[/bold red]")
+    # else:
+    #     console.print(f"[dim]Achievement '{achievement_name}' already unlocked.[/dim]") # Optional: for debugging
+
+def check_player_level_up(player):
+    """
+    Checks if a player has enough experience to level up.
+    Updates level, manages experience, and grants level-up rewards/achievements.
+    """
+    leveled_up = False
+    # Loop to handle multiple level-ups at once if a large amount of XP is gained
+    while True:
+        # Get the total XP needed to reach the *next* level
+        xp_needed_for_next_level = PLAYER_XP_THRESHOLDS.get(player.level + 1)
+
+        if xp_needed_for_next_level is None: # No more levels defined in thresholds
+            break
+
+        # Check if current_player's total experience is enough for the next level
+        if player.experience >= xp_needed_for_next_level:
+            player.level += 1
+            leveled_up = True
+            
+            console.print(Panel(
+                f"[bold yellow]CONGRATULATIONS, {player.username}![/bold yellow]\n"
+                f"You reached [bold green]Player Level {player.level}[/bold green]!",
+                title="[bold purple]LEVEL UP![/bold purple]",
+                border_style="purple"
+            ))
+            
+            # Trigger level-specific achievements
+            if player.level == 5:
+                unlock_achievement(player, "Player Level 5")
+            if player.level == 10:
+                unlock_achievement(player, "Player Level 10")
+            
+            # Grant a general "Level Up!" achievement/reward (if defined)
+            # This call will also update the player's money/xp and re-run check_player_level_up
+            unlock_achievement(player, "Level Up!")
+            
+            session.commit() # Commit level up immediately to persist
+        else:
+            break # Not enough XP for next level
+
+    # Note: Excess XP beyond the current level's requirement is automatically
+    # carried over, as player.experience stores total XP.
+
+def render_xp_bar(current_xp, level, for_player=False):
+    """
+    Renders an XP bar. Can be used for players (different threshold) or monsters.
+    """
+    if for_player:
+        # For player, current_xp is total XP, level is current player level
+        # We need XP to the *next* level
+        next_level = level + 1
+        xp_for_next_level = PLAYER_XP_THRESHOLDS.get(next_level)
+        
+        if xp_for_next_level is None: # Player at max defined level
+            return f"[bold green]MAX LEVEL![/bold green] {current_xp} XP"
+        
+        # XP needed for the current level's progress
+        xp_at_current_level_start = PLAYER_XP_THRESHOLDS.get(level, 0)
+        total_xp_for_this_level = xp_for_next_level - xp_at_current_level_start
+        xp_in_current_level = current_xp - xp_at_current_level_start
+
+        if total_xp_for_this_level <= 0: # Avoid division by zero if thresholds are misconfigured
+             fill_ratio = 1.0 # Assume full if no progress needed
+        else:
+            fill_ratio = xp_in_current_level / total_xp_for_this_level
+            
+        threshold_display = f"{xp_in_current_level}/{total_xp_for_this_level}"
+
+    else: # For monster
+        threshold = level * 10
+        fill_ratio = current_xp / threshold
+        threshold_display = f"{current_xp}/{threshold}"
+
+    bar_length = 40
+    filled = int(bar_length * fill_ratio)
+    empty = bar_length - filled
+    bar = f"[bold cyan]|[/bold cyan]{'█' * filled}{' ' * empty}[bold cyan]|[/bold cyan]"
+    return f"{bar} {threshold_display} EXP"
+
+def view_achievements():
+    """
+    🏆 View Player's Unlocked Achievements
+
+    - Displays a list of all achievements the current player has unlocked.
+    - Shows the achievement name, description, and unlock date.
+    - Uses Rich Table for presentation.
+    """
+    console.print(Panel(f"[bold gold]{current_player.username}'s Achievements[/bold gold]", expand=False))
+
+    player_achievements = session.query(PlayerAchievement)\
+        .filter_by(player_id=current_player.id)\
+        .join(Achievement)\
+        .order_by(PlayerAchievement.unlocked_at.asc())\
+        .all()
+
+    if not player_achievements:
+        console.print("[yellow]You haven't unlocked any achievements yet. Keep playing![/yellow]")
+        return
+
+    table = Table(show_header=True, header_style="bold green")
+    table.add_column("Achievement Name", style="cyan")
+    table.add_column("Description", style="white")
+    table.add_column("Unlocked On", style="dim")
+
+    for pa in player_achievements:
+        table.add_row(
+            pa.achievement.name,
+            pa.achievement.description,
+            pa.unlocked_at.strftime("%Y-%m-%d %H:%M") # Format date for display
+        )
+    console.print(table)
+
+
+def view_leaderboard():
+    """
+    📊 View Global Player Leaderboard
+
+    - Displays players ranked by level and experience.
+    - Highlights the current player.
+    """
+    console.print(Panel("[bold yellow]Global Leaderboard[/bold yellow]", expand=False))
+
+    # Query all players, ordered by level (desc) then experience (desc)
+    top_players = session.query(Player).order_by(Player.level.desc(), Player.experience.desc()).all()
+
+    if not top_players:
+        console.print("[yellow]No players found to display on the leaderboard.[/yellow]")
+        return
+
+    table = Table(show_header=True, header_style="bold blue")
+    table.add_column("Rank", style="dim", width=6)
+    table.add_column("Username", style="cyan")
+    table.add_column("Level", style="green")
+    table.add_column("Experience", style="magenta")
+    table.add_column("Money", style="yellow")
+    table.add_column("Monsters", style="white")
+    table.add_column("Wins", style="bold red")
+
+    for i, player in enumerate(top_players, 1):
+        monster_count = session.query(PlayerMonster).filter_by(player_id=player.id).count()
+        wins_count = session.query(Battle).filter_by(winner_id=player.id).count()
+        
+        row_style = "bold blue" if player.id == current_player.id else None
+
+        table.add_row(
+            str(i),
+            player.username,
+            str(player.level),
+            str(player.experience),
+            f"${player.money}",
+            str(monster_count),
+            str(wins_count),
+            style=row_style
+        )
+    console.print(table)
 
 def print_welcome():
     welcome_panel = Panel(
@@ -162,7 +379,7 @@ def view_profile():
     panel_content = f"""[bold blue]Username[/bold blue]: {current_player.username}
 [bold yellow]Level[/bold yellow]: {current_player.level}
 [bold green]Money[/bold green]: ${current_player.money}
-[bold magenta]Experience[/bold magenta]: {current_player.experience}"""
+[bold magenta]Experience[/bold magenta]: {render_xp_bar(current_player.experience, current_player.level, for_player=True)}"""
     
     console.print(Panel(panel_content, title=f"[bold cyan]{current_player.username}'s Profile[/bold cyan]", expand=False))
 
@@ -218,6 +435,25 @@ def attempt_catch():
         session.add(new_monster)
         session.commit()
         console.print(f"[bold green]Gotcha! {wild_monster_species.name} was caught![/bold green]")
+
+        unlock_achievement(current_player, "First Catch") # This will only fire once
+        if wild_monster_species.rarity == 'Rare':
+            unlock_achievement(current_player, "Rarity Hunter")
+        elif wild_monster_species.rarity == 'Epic':
+            unlock_achievement(current_player, "Epic Encounter")
+        elif wild_monster_species.rarity == 'Legendary':
+            unlock_achievement(current_player, "Legendary Tamer")
+        
+        # Check for Collector achievements (e.g., own 5 or 15 different species)
+        distinct_species_count = session.query(MonsterSpecies)\
+            .join(PlayerMonster)\
+            .filter(PlayerMonster.player_id == current_player.id)\
+            .distinct().count()
+
+        if distinct_species_count >= 5:
+            unlock_achievement(current_player, "Collector")
+        if distinct_species_count >= 15:
+            unlock_achievement(current_player, "Master Collector")
 
     else:
         console.print("[bold red]Oh no! The monster broke free![/bold red]")
@@ -373,6 +609,7 @@ def start_battle():
 
         console.print(f"You earned [magenta]{exp_gain} EXP[/magenta] and [green]${money_gain}[/green]!")
         console.print(f"[bold cyan]{player_monster.nickname}'s XP:[/bold cyan] {render_xp_bar(player_monster.current_experience, player_monster.level)}")
+        check_player_level_up(current_player)
 
     else:
         player_monster.current_hp = 0
@@ -455,9 +692,8 @@ def start_pvp_battle():
 
     # Prepare battle stats
     player_stats = calculate_monster_stats(player_monster)
-    opponent_stats = calculate_monster_stats(opponent_monster) # Opponent also uses PlayerMonster stats now!
+    opponent_stats = calculate_monster_stats(opponent_monster) 
 
-    # Current HP for battle (don't directly modify DB until commit)
     player_current_hp = player_monster.current_hp
     opponent_current_hp = opponent_monster.current_hp
 
@@ -495,7 +731,6 @@ def start_pvp_battle():
             live.update(main_table, refresh=True)
             time.sleep(1.0)
 
-            # Player's monster attacks
             player_atk_type = player_monster.species.monster_type
             opponent_def_type = opponent_monster.species.monster_type
             player_multiplier, player_effectiveness_msg = get_type_effectiveness(player_atk_type, opponent_def_type)
@@ -515,7 +750,6 @@ def start_pvp_battle():
                 winner_player_id = current_player.id
                 break
 
-            # Opponent's monster attacks back
             opponent_atk_type = opponent_monster.species.monster_type
             player_def_type = player_monster.species.monster_type
             opponent_multiplier, opponent_effectiveness_msg = get_type_effectiveness(opponent_atk_type, player_def_type)
@@ -535,7 +769,6 @@ def start_pvp_battle():
                 winner_player_id = opponent_player.id
                 break
 
-    # 4. Battle Outcome and Persistence
     player_monster.current_hp = max(0, player_current_hp)
     opponent_monster.current_hp = max(0, opponent_current_hp)
 
@@ -554,8 +787,8 @@ def start_pvp_battle():
                 f"[bold green]Victory! You defeated {opponent_player.username}'s {opponent_monster.nickname}![/bold green]",
                 border_style="green"
             ))
-            exp_gain = opponent_monster.level * 5 # PvP XP reward
-            money_gain = opponent_monster.level * 10 # PvP Money reward
+            exp_gain = opponent_monster.level * 5 
+            money_gain = opponent_monster.level * 10 
 
             player_monster.current_experience += exp_gain
             current_player.experience += exp_gain
@@ -566,7 +799,7 @@ def start_pvp_battle():
             while player_monster.current_experience >= player_monster.level * 10:
                 player_monster.current_experience -= player_monster.level * 10
                 player_monster.level += 1
-                player_monster.current_hp = calculate_monster_stats(player_monster)['max_hp'] # Fully heal on level up
+                player_monster.current_hp = calculate_monster_stats(player_monster)['max_hp']
                 leveled_up = True
 
             if leveled_up:
@@ -577,16 +810,13 @@ def start_pvp_battle():
 
             console.print(f"You earned [magenta]{exp_gain} EXP[/magenta] and [green]${money_gain}[/green]!")
             
-            # Healing message if not leveled up
             if not leveled_up:
                 max_hp_after_battle = calculate_monster_stats(player_monster)['max_hp']
-                # Ensure current_hp doesn't exceed max_hp after battle if no level up
                 player_monster.current_hp = min(player_monster.current_hp, max_hp_after_battle)
 
+            unlock_achievement(current_player, "First Win")
+            check_player_level_up(current_player)
 
-            # Check for achievements after win
-            # (We'll implement unlock_achievement and its checks next)
-            # unlock_achievement(current_player, "First Win") # Example
 
         else: # Opponent won
             console.print(Panel(
@@ -594,9 +824,7 @@ def start_pvp_battle():
                 f"Your {player_monster.nickname} needs healing!",
                 border_style="red"
             ))
-            # No XP/money for losing, monster remains injured.
-            # You might want to add a small money penalty or experience loss here.
-
+           
         session.commit()
         console.print("[dim]Battle results saved.[/dim]")
 
@@ -864,48 +1092,58 @@ def heal_monster(session, player):
         for monster in injured:
             healing_animation(monster.nickname)
 
-
- 
 def main_menu():
-    global current_player  
+    global current_player
     while True:
-        console.rule(f"[bold light_steel_blue]Main Menu[/bold light_steel_blue] | Logged in as: [slate_blue1]{current_player.username}[/slate_blue1]")
+        console.rule(f"[bold blue]Main Menu[/bold blue] | Logged in as: [green]{current_player.username}[/green]")
+        
+        console.print("[1] View My Profile")
+        console.print("[2] View My Achievements")         
+        console.print("[3] View Leaderboard")             
+        console.print("[4] View My Monster Collection")   
+        console.print("[5] Explore and Catch Monsters")   
+        console.print("[6] Battle a Wild Monster (PvE)")  
+        console.print("[7] Trade with Players")           
+        console.print("[8] Logout and Switch Player")     
+        console.print("[9] Heal Your Monsters")           
+        console.print("[10] [bold yellow]Battle another Player (PvP)[/bold yellow]") 
+        console.print("[11] Exit Game")                   
 
-        console.print("[1] [slate_blue1]View My Profile[/slatum3]")
-        console.print("[6] [plum3]Trade with Players[/plum3]")
-
-        console.print("[7] [sky_blue1]Heal Your Monsters[/sky_blue1]")
-        console.print("[8] [sky_blue1]Logout and Switch Player[/sky_blue1]")
-
-        console.print("[9] [grey37]Exit Game[/grey37]")
-
-
-        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8","9"])
+        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])
 
         if choice == '1':
             view_profile()
-        elif choice == '2':
+        elif choice == '2':  
+            view_achievements()
+        elif choice == '3':  
+            view_leaderboard()
+        elif choice == '4': 
             view_collection()
-        elif choice == '3':
+        elif choice == '5':  
             attempt_catch()
-        elif choice == '4':
+        elif choice == '6':  
             start_battle()
-        elif choice == '5':
-            start_pvp_battle()
-        elif choice == '6':
+        elif choice == '7': 
             trade_system()
-        elif choice == '7':
-            heal_monster(session, current_player)
         elif choice == '8': 
-             current_player = None
-             console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
-             login_or_register()    
-        elif choice == '9':
+            current_player = None
+            console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
+            login_or_register()
+        elif choice == '9':  
+            try:
+                heal_monster(session, current_player)
+            except NameError:
+                console.print("[bold red]Heal function not found![/bold red]")
+                console.print("[dim]Make sure `heal_monster` is defined or imported.[/dim]")
+        elif choice == '10': 
+            start_pvp_battle()
+        elif choice == '11': 
             console.print(Panel("[bold magenta]Thanks for playing Monster World![/bold magenta]"))
             break
         
-        if choice in ['1', '2', '3', '4', '5', '8']:
+        if choice in ['1', '2', '3', '4', '5', '6', '7', '10']:
             Prompt.ask("\n[italic]Press Enter to return to the menu...[/italic]")
+ 
 
 if __name__ == '__main__':
     print_welcome()
