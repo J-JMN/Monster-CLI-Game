@@ -1101,17 +1101,18 @@ def main_menu():
     while True:
         console.rule(f"[bold light_steel_blue]Main Menu[/bold light_steel_blue] | Logged in as: [slate_blue1]{current_player.username}[/slate_blue1]")
 
-        console.print("[1] [slate_blue1]View My Profile[/slate_blue1]")
-        console.print("[2] [slate_blue1]View My Achievements[/slate_blue1]")
-        console.print("[3] [slate_blue1]View Leaderboard[/slate_blue1]")
-        console.print("[4] [slate_blue1]View My Monster Collection[/slate_blue1]")
+        console.print("[1] [light_sky_blue1]View My Profile[/light_sky_blue1]")
+        console.print("[2] [light_sky_blue1]View My Achievements[/light_sky_blue1]")
+        console.print("[3] [light_sky_blue1]View Leaderboard[/light_sky_blue1]")
+        console.print("[4] [light_sky_blue1]View My Monster Collection[/light_sky_blue1]")
         console.print("[5] [medium_purple3]Explore and Catch Monsters[/medium_purple3]")
         console.print("[6] [medium_purple3]Battle a Wild Monster (PvE)[/medium_purple3]")
         console.print("[7] [plum3]Battle another Player (PvP)[/plum3]")
-        console.print("[8] [sky_blue1]Heal Your Monsters[/sky_blue1]")
-        console.print("[9] [plum3]Trade with Players[/plum3]")
-        console.print("[10] [sky_blue1]Logout and Switch Player[/sky_blue1]")
-        console.print("[11] [grey37]Exit Game[/grey37]")
+        console.print("[8] [plum3]Trade with Players[/plum3]")
+        console.print("[9] [light_sea_green]Heal Your Monsters[/light_sea_green]")
+        console.print("[10] [light_sea_green]Logout and Switch Player[/light_sea_green]")
+        console.print("[11] [bold white]Exit Game[/bold white]")
+
         
         choice = Prompt.ask(
             "\n[bold white]What would you like to do?[/bold white]",
