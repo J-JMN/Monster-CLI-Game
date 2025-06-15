@@ -39,6 +39,16 @@ PLAYER_XP_THRESHOLDS = {
     8: 1750,
     9: 2200,
     10: 2700,
+    11: 3250,
+    12: 3850,
+    13: 4500,
+    14: 5200,
+    15: 5950,
+    16: 6750,
+    17: 7600,
+    18: 8500,
+    19: 9450,
+    20: 10400, # Max level defined in thresholds
 }
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -1099,8 +1109,8 @@ def main_menu():
         console.print("[5] [medium_purple3]Explore and Catch Monsters[/medium_purple3]")
         console.print("[6] [medium_purple3]Battle a Wild Monster (PvE)[/medium_purple3]")
         console.print("[7] [plum3]Battle another Player (PvP)[/plum3]")
-        console.print("[8] [plum3]Trade with Players[/plum3]")
-        console.print("[9] [light_sea_green]Heal Your Monsters[/light_sea_green]")
+        console.print("[8] [light_sea_green]Heal Your Monsters[/light_sea_green]")
+        console.print("[9] [plum3]Trade with Players[/plum3]")
         console.print("[10] [light_sea_green]Logout and Switch Player[/light_sea_green]")
         console.print("[11] [bold white]Exit Game[/bold white]")
 
