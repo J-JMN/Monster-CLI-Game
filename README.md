@@ -20,8 +20,6 @@ A captivating command-line interface monster-collecting and battling game built 
 
 * [Technologies Used](#technologies-used)
 
-* [Future Enhancements](#future-enhancements)
-
 ## Description
 
 Monster World is a text-based adventure where players can register, collect unique monsters, engage in dynamic turn-based battles against wild creatures or other players, trade monsters, and track their progress through an integrated achievement system and global leaderboard. The game leverages `Rich` for a vibrant and engaging command-line interface.
