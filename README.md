@@ -1,9 +1,10 @@
-<pre>███╗   ███╗ ██████╗ ███╗   ██╗███████╗████████╗███████╗██████╗
-████╗ ████║██╔═══██╗████╗  ██║██╔════╝╚══██╔══╝██╔════╝██╔══██╗
-██╔████╔██║██║   ██║██╔██╗ ██║███████╗  ██║   █████╗  ██████╔╝
-██║╚██╔╝██║██║   ██║██║╚██╗██║╚════██║  ██║   ██╔══╝  ██╔══██╗
-██║ ╚═╝ ██║╚██████╔╝██║ ╚████║███████║  ██║   ███████╗██║  ██║
-╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝  ╚═╝   ╚══════╝╚═╝  ╚═╝</pre>
+<pre>
+    ███╗   ███╗ ██████╗ ███╗   ██╗███████╗████████╗███████╗██████╗
+    ████╗ ████║██╔═══██╗████╗  ██║██╔════╝╚══██╔══╝██╔════╝██╔══██╗
+    ██╔████╔██║██║   ██║██╔██╗ ██║███████╗   ██║   █████╗  ██████╔╝
+    ██║╚██╔╝██║██║   ██║██║╚██╗██║╚════██║   ██║   ██╔══╝  ██╔══██╗
+    ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║███████║   ██║   ███████╗██║  ██║
+    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝</pre>
 
 # Monster World CLI Game
 
@@ -107,16 +108,6 @@ To get this game up and running on your local machine:
 * **Rich:** A Python library for rich text and beautiful formatting in the terminal.
 
 * **SQLite:** A lightweight, file-based database for persistence.
-
-## Future Enhancements
-
-* More complex battle mechanics (abilities, status effects).
-
-* Item system (potions, rare candies, etc.).
-
-* More diverse monster types and abilities.
-
-* Improved user input validation and error handling.
 
 ## License
 
