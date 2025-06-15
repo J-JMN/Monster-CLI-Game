@@ -1090,57 +1090,68 @@ def heal_monster(session, player):
         for monster in injured:
             healing_animation(monster.nickname)
 
+from rich.console import Console
+from rich.prompt import Prompt
+from rich.panel import Panel
+
+console = Console()
+
 def main_menu():
     global current_player
     while True:
-        console.rule(f"[bold blue]Main Menu[/bold blue] | Logged in as: [green]{current_player.username}[/green]")
-        
-        console.print("[1] View My Profile")
-        console.print("[2] View My Achievements")         
-        console.print("[3] View Leaderboard")             
-        console.print("[4] View My Monster Collection")   
-        console.print("[5] Explore and Catch Monsters")   
-        console.print("[6] Battle a Wild Monster (PvE)")  
-        console.print("[7] Trade with Players")           
-        console.print("[8] Logout and Switch Player")     
-        console.print("[9] Heal Your Monsters")           
-        console.print("[10] [bold yellow]Battle another Player (PvP)[/bold yellow]") 
-        console.print("[11] Exit Game")                   
+        console.rule(f"[bold light_steel_blue]Main Menu[/bold light_steel_blue] | Logged in as: [slate_blue1]{current_player.username}[/slate_blue1]")
 
-        choice = Prompt.ask("What would you like to do?", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"])
+        console.print("[1] [slate_blue1]View My Profile[/slate_blue1]")
+        console.print("[2] [slate_blue1]View My Achievements[/slate_blue1]")
+        console.print("[3] [slate_blue1]View Leaderboard[/slate_blue1]")
+        console.print("[4] [slate_blue1]View My Monster Collection[/slate_blue1]")
+        console.print("[5] [medium_purple3]Explore and Catch Monsters[/medium_purple3]")
+        console.print("[6] [medium_purple3]Battle a Wild Monster (PvE)[/medium_purple3]")
+        console.print("[7] [plum3]Battle another Player (PvP)[/plum3]")
+        console.print("[8] [sky_blue1]Heal Your Monsters[/sky_blue1]")
+        console.print("[9] [plum3]Trade with Players[/plum3]")
+        console.print("[10] [sky_blue1]Logout and Switch Player[/sky_blue1]")
+        console.print("[11] [grey37]Exit Game[/grey37]")
+        
+        choice = Prompt.ask(
+            "\n[bold white]What would you like to do?[/bold white]",
+            choices=[str(i) for i in range(1, 12)]
+        )
 
         if choice == '1':
             view_profile()
-        elif choice == '2':  
+        elif choice == '2':
             view_achievements()
-        elif choice == '3':  
+        elif choice == '3':
             view_leaderboard()
-        elif choice == '4': 
+        elif choice == '4':
             view_collection()
-        elif choice == '5':  
+        elif choice == '5':
             attempt_catch()
-        elif choice == '6':  
+        elif choice == '6':
             start_battle()
-        elif choice == '7': 
-            trade_system()
-        elif choice == '8': 
-            current_player = None
-            console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
-            login_or_register()
-        elif choice == '9':  
+        elif choice == '7':
+            start_pvp_battle()
+        elif choice == '8':
             try:
                 heal_monster(session, current_player)
             except NameError:
                 console.print("[bold red]Heal function not found![/bold red]")
-                console.print("[dim]Make sure `heal_monster` is defined or imported.[/dim]")
-        elif choice == '10': 
-            start_pvp_battle()
-        elif choice == '11': 
+                console.print("[dim]Make sure `heal_monster` is defined or imported properly.[/dim]")
+        elif choice == '9':
+            trade_system()
+        elif choice == '10':
+            current_player = None
+            console.print("\n[bold yellow]You have been logged out.[/bold yellow]")
+            login_or_register()
+            continue  
+        elif choice == '11':
             console.print(Panel("[bold magenta]Thanks for playing Monster World![/bold magenta]"))
             break
-        
-        if choice in ['1', '2', '3', '4', '5', '6', '7', '10']:
-            Prompt.ask("\n[italic]Press Enter to return to the menu...[/italic]")
+
+        if choice in ['1', '2', '3', '4', '5', '6', '7', '8', '9']:
+            Prompt.ask("\n[italic dim]Press Enter to return to the menu...[/italic dim]")
+
  
 
 if __name__ == '__main__':
