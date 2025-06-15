@@ -74,6 +74,7 @@ def calculate_monster_stats(monster):
     return stats
 
 def unlock_achievement(player, achievement_name):
+    achievement = session.query(Achievement).filter_by(name=achievement_name).first() 
     if not achievement:
         # console.print(f"[bold red]Error: Achievement '{achievement_name}' not found in DB.[/bold red]")
         return
@@ -145,10 +146,7 @@ def check_player_level_up(player):
             
             session.commit() # Commit level up immediately to persist
         else:
-            break # Not enough XP for next level
-
-    # Note: Excess XP beyond the current level's requirement is automatically
-    # carried over, as player.experience stores total XP.
+            break 
 
 def render_xp_bar(current_xp, level, for_player=False):
     """
