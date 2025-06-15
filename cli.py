@@ -456,15 +456,6 @@ def attempt_catch():
     else:
         console.print("[bold red]Oh no! The monster broke free![/bold red]")
 
-def render_xp_bar(current_xp, level):
-    threshold = level * 10
-    bar_length = 40
-    fill_ratio = current_xp / threshold
-    filled = int(bar_length * fill_ratio)
-    empty = bar_length - filled
-    bar = f"[bold cyan]|[/bold cyan]{'█' * filled}{' ' * empty}[bold cyan]|[/bold cyan]"
-    return f"{bar} {current_xp}/{threshold} XP"
-
 def get_type_effectiveness(attacker_type, defender_type):
     """
     🧮 Calculate Type Effectiveness
